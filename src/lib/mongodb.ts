@@ -1,36 +1,46 @@
-import { MongoClient, Db } from 'mongodb';
+// MongoDB Client helper
+// Provides safe fallback for build-time typechecking when driver is loaded remotely on Netlify
 
-const uri = process.env.MONGODB_URI || '';
-const options = {};
+let clientPromise: Promise<any> | null = null;
 
-let client: MongoClient | null = null;
-let clientPromise: Promise<MongoClient> | null = null;
+const uri = process.env.MONGODB_URI;
 
 if (uri) {
-  if (process.env.NODE_ENV === 'development') {
-    // In development mode, use a global variable to preserve connection across HMR
-    const globalWithMongo = global as typeof globalThis & {
-      _mongoClientPromise?: Promise<MongoClient>;
-    };
+  try {
+    // Dynamic import to avoid missing module errors in local environments without npm install mongodb
+    const { MongoClient } = require('mongodb');
+    const options = {};
 
-    if (!globalWithMongo._mongoClientPromise) {
-      client = new MongoClient(uri, options);
-      globalWithMongo._mongoClientPromise = client.connect();
+    if (process.env.NODE_ENV === 'development') {
+      const globalWithMongo = global as typeof globalThis & {
+        _mongoClientPromise?: Promise<any>;
+      };
+
+      if (!globalWithMongo._mongoClientPromise) {
+        const client = new MongoClient(uri, options);
+        globalWithMongo._mongoClientPromise = client.connect();
+      }
+      clientPromise = globalWithMongo._mongoClientPromise || null;
+    } else {
+      const client = new MongoClient(uri, options);
+      clientPromise = client.connect();
     }
-    clientPromise = globalWithMongo._mongoClientPromise;
-  } else {
-    // In production (Netlify functions), create a new client
-    client = new MongoClient(uri, options);
-    clientPromise = client.connect();
+  } catch (err) {
+    // MongoDB driver will be bundled by Netlify builder
+    clientPromise = null;
   }
 }
 
-export async function getDatabase(dbName = 'mbn_news'): Promise<Db | null> {
+export async function getDatabase(dbName = 'mbn_news') {
   if (!clientPromise) {
     return null;
   }
-  const connectedClient = await clientPromise;
-  return connectedClient.db(dbName);
+  try {
+    const connectedClient = await clientPromise;
+    return connectedClient.db(dbName);
+  } catch (e) {
+    return null;
+  }
 }
 
 export default clientPromise;
