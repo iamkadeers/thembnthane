@@ -67,7 +67,7 @@ export default function MemberDashboardPage() {
     area: '',
     latitude: undefined as number | undefined,
     longitude: undefined as number | undefined,
-    news_datetime: new Date().toISOString().slice(0, 16),
+    news_datetime: '',
     main_image_url: '',
     supporting_images: '',
     video_url: '',
@@ -88,6 +88,11 @@ export default function MemberDashboardPage() {
   const [issueSubmitted, setIssueSubmitted] = useState(false);
 
   useEffect(() => {
+    setNewsForm((prev) => ({
+      ...prev,
+      news_datetime: prev.news_datetime || new Date().toISOString().slice(0, 16)
+    }));
+
     const savedMember = sessionStorage.getItem('mbn_active_member');
     if (savedMember) {
       try {
